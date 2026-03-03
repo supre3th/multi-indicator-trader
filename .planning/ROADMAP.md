@@ -20,11 +20,11 @@
 
 **Goal:** Project setup, data fetching, basic chart display
 
-**Status:** In Progress (Plan 01/XX complete)
+**Status:** In Progress (Plan 02/03 complete)
 
 **Requirements addressed:**
 - [x] Project setup (frontend + backend)
-- [ ] Binance API integration
+- [x] Binance API integration
 - [ ] Candlestick chart display
 - [ ] Symbol/timeframe selection
 
