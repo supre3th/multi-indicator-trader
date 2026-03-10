@@ -12,7 +12,8 @@ def calculate_mfi(
     low: pd.Series,
     close: pd.Series,
     volume: pd.Series,
-    period: int = 14
+    period: int = 14,
+    scaled: bool = True
 ) -> pd.Series:
     """
     Calculate Money Flow Index (MFI).
@@ -26,10 +27,12 @@ def calculate_mfi(
         close: Close prices
         volume: Volume
         period: Lookback period (default 14)
+        scaled: If True, scale from 0-100 to -100 to +100 to match CCI (default True)
     
     Returns:
-        MFI values
+        MFI values (scaled to -100 to +100 range if scaled=True)
     """
+    # Use typical price (hlc3) as source - matches PineScript
     typical_price = (high + low + close) / 3
     
     # Raw money flow
@@ -54,6 +57,11 @@ def calculate_mfi(
     # Money ratio and MFI
     money_ratio = positive_mf_sum / negative_mf_sum
     mfi = 100 - (100 / (1 + money_ratio))
+    
+    # Scale from 0-100 to -100 to +100 to match CCI range (PineScript logic)
+    # MFI 0 → -100, MFI 50 → 0, MFI 100 → +100
+    if scaled:
+        mfi = (mfi - 50) * 2
     
     return mfi
 
