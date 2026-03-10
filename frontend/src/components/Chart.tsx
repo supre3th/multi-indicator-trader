@@ -6,6 +6,8 @@ import { useChartStore } from '@/stores/chartStore';
 import { useIndicatorStore, IndicatorData } from '@/stores/indicatorStore';
 import { fetchKlines, fetchIndicators } from '@/lib/api';
 import { PriceChannel } from './chart/PriceChannel';
+import { SetupTable, detectSetup } from './chart/SetupTable';
+import { IndicatorSettings } from './ui/IndicatorSettings';
 
 export function Chart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +36,9 @@ export function Chart() {
   // MTF channel state
   const [higherTfChannel, setHigherTfChannel] = useState<IndicatorData[]>([]);
   const [selectedHigherTf, setSelectedHigherTf] = useState<string>('');
+
+  // Settings panel state
+  const [showSettings, setShowSettings] = useState(false);
 
   // MTF timeframe mapping
   const higherTfOptions: Record<string, string[]> = {
@@ -272,6 +277,56 @@ export function Chart() {
     loadData();
   }, [loadData]);
 
+  // Background tint based on setup
+  useEffect(() => {
+    if (!chartRef.current) return;
+    
+    const latestData = indicatorStore.data.length > 0 
+      ? indicatorStore.data[indicatorStore.data.length - 1] 
+      : null;
+    
+    if (!latestData || latestData.adx == null) {
+      chartRef.current.applyOptions({
+        layout: {
+          background: { type: ColorType.Solid, color: theme === 'dark' ? '#000' : '#fff' },
+        },
+      });
+      return;
+    }
+    
+    const setup = detectSetup(
+      latestData.adx, 
+      latestData.di_plus || 0, 
+      latestData.di_minus || 0, 
+      latestData.cci || 0, 
+      latestData.mfi || 50
+    );
+    
+    const bgColors: Record<string, string> = {
+      'Strong Uptrend': 'rgba(34, 197, 94, 0.05)',
+      'Strong Downtrend': 'rgba(239, 68, 68, 0.05)',
+      'Trend Long': 'rgba(74, 222, 128, 0.03)',
+      'Trend Short': 'rgba(251, 146, 60, 0.03)',
+      'Oversold Long': 'rgba(34, 211, 238, 0.03)',
+      'Overbought Short': 'rgba(232, 121, 249, 0.03)',
+    };
+    
+    const baseColor = theme === 'dark' ? '#000' : '#fff';
+    const tintColor = bgColors[setup];
+    
+    // Apply base color with tint overlay
+    chartRef.current.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: tintColor || baseColor },
+      },
+    });
+  }, [indicatorStore.data, theme]);
+
+  // Get latest data for setup table
+  const latestData = indicatorStore.data.length > 0 
+    ? indicatorStore.data[indicatorStore.data.length - 1] 
+    : null;
+
   return (
     <div className="relative w-full h-full">
       {isLoading && (
@@ -281,6 +336,26 @@ export function Chart() {
           </div>
         </div>
       )}
+      
+      {/* Toolbar with indicator settings button */}
+      <div className="absolute top-2 left-2 z-50 flex gap-2">
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium"
+        >
+          Indicators
+        </button>
+      </div>
+      
+      {/* Setup table overlay */}
+      <SetupTable data={latestData} />
+      
+      {/* Indicator settings panel */}
+      <IndicatorSettings 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)} 
+      />
+      
       <div ref={chartContainerRef} className="w-full h-full" />
       <PriceChannel
         chart={chartRef.current}

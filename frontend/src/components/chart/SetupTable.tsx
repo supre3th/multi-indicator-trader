@@ -75,16 +75,16 @@ export function SetupTable({ data }: SetupTableProps) {
         
         <span className="text-gray-400">CCI:</span>
         <span style={{ 
-          color: data.cci > CCI_OVERBOUGHT ? '#ef4444' : data.cci < CCI_OVERSOLD ? '#22c55e' : '#2962FF' 
+          color: (data.cci || 0) > CCI_OVERBOUGHT ? '#ef4444' : (data.cci || 0) < CCI_OVERSOLD ? '#22c55e' : '#2962FF' 
         }}>
-          {data.cci?.toFixed(1)}
+          {(data.cci || 0).toFixed(1)}
         </span>
         
         <span className="text-gray-400">MFI:</span>
         <span style={{ 
-          color: data.mfi > MFI_OVERBOUGHT ? '#ef4444' : data.mfi < MFI_OVERSOLD ? '#22c55e' : '#FDE832' 
+          color: (data.mfi || 0) > MFI_OVERBOUGHT ? '#ef4444' : (data.mfi || 0) < MFI_OVERSOLD ? '#22c55e' : '#FDE832' 
         }}>
-          {data.mfi?.toFixed(1)}
+          {(data.mfi || 0).toFixed(1)}
         </span>
       </div>
     </div>
