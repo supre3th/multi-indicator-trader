@@ -14,6 +14,16 @@ import { debug } from '@/lib/debug';
 const log = (...args: unknown[]) => console.log('[Chart]', ...args);
 const logError = (...args: unknown[]) => console.error('[Chart ERROR]', ...args);
 
+// MTF timeframe mapping - defined outside component to prevent recreating loadData
+const HIGHER_TF_OPTIONS: Record<string, string[]> = {
+  '1m': ['5m', '15m'],
+  '5m': ['15m', '1h'],
+  '15m': ['1h', '4h'],
+  '1h': ['4h', '1d'],
+  '4h': ['1d', '1w'],
+  '1d': ['1w', '1M'],
+};
+
 export function Chart() {
   log('Chart component rendering');
   
@@ -46,16 +56,6 @@ export function Chart() {
 
   // Settings panel state
   const [showSettings, setShowSettings] = useState(false);
-
-  // MTF timeframe mapping
-  const higherTfOptions: Record<string, string[]> = {
-    '1m': ['5m', '15m'],
-    '5m': ['15m', '1h'],
-    '15m': ['1h', '4h'],
-    '1h': ['4h', '1d'],
-    '4h': ['1d', '1w'],
-    '1d': ['1w', '1M'],
-  };
 
   // Initialize chart
   useEffect(() => {
@@ -256,7 +256,7 @@ export function Chart() {
 
         // Fetch MTF channel if showChannel is enabled
         if (showChannel && higherTf) {
-          const higherOptions = higherTfOptions[timeframe];
+          const higherOptions = HIGHER_TF_OPTIONS[timeframe];
           if (higherOptions && higherOptions.includes(higherTf)) {
             const mtfResponse = await fetchIndicators(symbol, higherTf, {
               channelPeriod,
@@ -290,7 +290,7 @@ export function Chart() {
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries, higherTfOptions]);
+  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries]);
 
   useEffect(() => {
     loadData();
