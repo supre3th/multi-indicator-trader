@@ -1,0 +1,71 @@
+"""
+API endpoints for indicator calculations.
+"""
+from fastapi import APIRouter, Query
+from typing import Any, Dict, List
+from app.services.indicators import calculate_indicators
+from app.models.indicators import IndicatorResponse, IndicatorValue
+
+router = APIRouter()
+
+
+def _dict_to_indicator_value(d: Dict[str, Any]) -> IndicatorValue:
+    """Convert a dictionary to IndicatorValue, handling None values."""
+    return IndicatorValue(
+        time=int(d['time']),
+        open=float(d['open']),
+        high=float(d['high']),
+        low=float(d['low']),
+        close=float(d['close']),
+        volume=float(d['volume']),
+        mfi=float(d['mfi']) if d.get('mfi') is not None else None,
+        cci=float(d['cci']) if d.get('cci') is not None else None,
+        adx=float(d['adx']) if d.get('adx') is not None else None,
+        di_plus=float(d['di_plus']) if d.get('di_plus') is not None else None,
+        di_minus=float(d['di_minus']) if d.get('di_minus') is not None else None,
+        channel_upper=float(d['channel_upper']) if d.get('channel_upper') is not None else None,
+        channel_middle=float(d['channel_middle']) if d.get('channel_middle') is not None else None,
+        channel_lower=float(d['channel_lower']) if d.get('channel_lower') is not None else None,
+    )
+
+
+@router.get("/indicators", response_model=IndicatorResponse)
+async def get_indicators(
+    symbol: str = Query("BTC/USDT", description="Trading symbol"),
+    interval: str = Query("1h", description="Timeframe"),
+    mfi_period: int = Query(14, description="MFI period"),
+    cci_period: int = Query(20, description="CCI period"),
+    adx_period: int = Query(14, description="ADX period"),
+    channel_period: int = Query(20, description="Channel period"),
+    channel_type: str = Query("pivot", description="Channel type: pivot, donchian, linear_regression"),
+    limit: int = Query(200, description="Number of candles"),
+) -> IndicatorResponse:
+    """Calculate MFI, CCI, ADX, DI, and Price Channel indicators."""
+    from app.services.binance import fetch_klines
+    
+    # Fetch klines with extra data for indicator warmup
+    max_period = max(mfi_period, cci_period, adx_period, channel_period)
+    klines = await fetch_klines(symbol, interval, limit=limit + max_period)
+    
+    # Calculate indicators
+    data = calculate_indicators(
+        klines,
+        mfi_period=mfi_period,
+        cci_period=cci_period,
+        adx_period=adx_period,
+        channel_period=channel_period,
+        channel_type=channel_type,
+    )
+    
+    # Return only the requested number of candles
+    data = data[-limit:]
+    
+    # Convert to IndicatorValue objects for proper Pydantic validation
+    indicator_data = [_dict_to_indicator_value(d) for d in data]
+    
+    return IndicatorResponse(
+        symbol=symbol,
+        interval=interval,
+        data=indicator_data,
+        count=len(indicator_data)
+    )
