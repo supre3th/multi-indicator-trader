@@ -34,6 +34,14 @@ export function Chart() {
   // Indicator series refs
   const [mfiSeries, setMfiSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [cciMaSeries, setCciMaSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  // Threshold lines
+  const [cciBandUpperSeries, setCciBandUpperSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [cciBandLowerSeries, setCciBandLowerSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [mfiUpperSeries, setMfiUpperSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [mfiLowerSeries, setMfiLowerSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [middleLineSeries, setMiddleLineSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  // Crossover markers
+  const [crossoverMarkersSeries, setCrossoverMarkersSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [adxSeries, setAdxSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [diPlusSeries, setDiPlusSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [diMinusSeries, setDiMinusSeries] = useState<ISeriesApi<"Line"> | null>(null);
@@ -111,6 +119,54 @@ export function Chart() {
       lineWidth: 1,
       title: 'CCI MA',
     }, 1);
+    
+    // Threshold lines - CCI bands at ±100 (gray, dashed)
+    const cciBandUpper = chart.addSeries(LineSeries, {
+      color: '#787B86',
+      lineWidth: 1,
+      lineStyle: 2, // dashed
+      title: '+100',
+      lastValueVisible: false,
+    }, 1);
+    const cciBandLower = chart.addSeries(LineSeries, {
+      color: '#787B86',
+      lineWidth: 1,
+      lineStyle: 2, // dashed
+      title: '-100',
+      lastValueVisible: false,
+    }, 1);
+    
+    // Threshold lines - MFI levels at ±60
+    const mfiUpper = chart.addSeries(LineSeries, {
+      color: '#ff0000', // red
+      lineWidth: 1,
+      lineStyle: 0, // solid
+      title: '+60',
+      lastValueVisible: false,
+    }, 1);
+    const mfiLower = chart.addSeries(LineSeries, {
+      color: '#00ff00', // green
+      lineWidth: 1,
+      lineStyle: 0, // solid
+      title: '-60',
+      lastValueVisible: false,
+    }, 1);
+    
+    // Middle line at 0
+    const middleLine = chart.addSeries(LineSeries, {
+      color: '#787B86',
+      lineWidth: 1,
+      lineStyle: 1, // dotted
+      title: '0',
+      lastValueVisible: false,
+    }, 1);
+    
+    // Crossover markers series (invisible line, just for markers)
+    const crossoverMarkers = chart.addSeries(LineSeries, {
+      color: 'transparent',
+      lineWidth: 1,
+      lastValueVisible: false,
+    }, 1);
 
     // ADX+DI pane (pane 2) - Colors LOCKED from CONTEXT.md
     const adx = chart.addSeries(LineSeries, {
@@ -139,6 +195,12 @@ export function Chart() {
     candlestickSeriesRef.current = candlestickSeries;
     setMfiSeries(mfi);
     setCciMaSeries(cciMa);
+    setCciBandUpperSeries(cciBandUpper);
+    setCciBandLowerSeries(cciBandLower);
+    setMfiUpperSeries(mfiUpper);
+    setMfiLowerSeries(mfiLower);
+    setMiddleLineSeries(middleLine);
+    setCrossoverMarkersSeries(crossoverMarkers);
     setAdxSeries(adx);
     setDiPlusSeries(diPlus);
     setDiMinusSeries(diMinus);
@@ -162,6 +224,13 @@ export function Chart() {
       chartRef.current = null;
       candlestickSeriesRef.current = null;
       setMfiSeries(null);
+      setCciMaSeries(null);
+      setCciBandUpperSeries(null);
+      setCciBandLowerSeries(null);
+      setMfiUpperSeries(null);
+      setMfiLowerSeries(null);
+      setMiddleLineSeries(null);
+      setCrossoverMarkersSeries(null);
       setAdxSeries(null);
       setDiPlusSeries(null);
       setDiMinusSeries(null);
@@ -235,6 +304,17 @@ export function Chart() {
           .map(d => ({ time: (d.time / 1000) as any, value: d.cci_ma }));
         mfiSeries?.setData(mfiData);
         cciMaSeries?.setData(cciMaData);
+        
+        // Update threshold lines (horizontal lines at constant values)
+        const times = indicatorData.data.map(d => ({ time: (d.time / 1000) as any }));
+        cciBandUpperSeries?.setData(times.map(t => ({ ...t, value: 100 })));
+        cciBandLowerSeries?.setData(times.map(t => ({ ...t, value: -100 })));
+        mfiUpperSeries?.setData(times.map(t => ({ ...t, value: 60 })));
+        mfiLowerSeries?.setData(times.map(t => ({ ...t, value: -60 })));
+        middleLineSeries?.setData(times.map(t => ({ ...t, value: 0 })));
+        
+        // Note: Crossover markers would require lightweight-charts markers API
+        // For now, we show the threshold lines which indicate where crossovers happen
 
         // Update ADX+DI pane (pane 2)
         const adxData = indicatorData.data
@@ -289,7 +369,7 @@ export function Chart() {
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, mfiSeries, cciMaSeries, adxSeries, diPlusSeries, diMinusSeries]);
+  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, mfiSeries, cciMaSeries, cciBandUpperSeries, cciBandLowerSeries, mfiUpperSeries, mfiLowerSeries, middleLineSeries, crossoverMarkersSeries, adxSeries, diPlusSeries, diMinusSeries]);
 
   useEffect(() => {
     loadData();

@@ -12,9 +12,17 @@ export interface IndicatorData {
   // CCI + MFI (PineScript)
   cci?: number;
   mfi?: number;
-  cci_ma?: number;      // Optional CCI smoothing
+  cci_ma?: number;      // CCI smoothing MA
   bb_upper?: number;    // Bollinger upper
   bb_lower?: number;    // Bollinger lower
+  // Threshold lines
+  cci_band_upper?: number;  // +100
+  cci_band_lower?: number;  // -100
+  mfi_upper?: number;       // +60
+  mfi_lower?: number;       // -60
+  // Crossover signals
+  mfi_cross_above?: boolean;
+  mfi_cross_below?: boolean;
   // ADX/DI
   adx?: number;
   di_plus?: number;
