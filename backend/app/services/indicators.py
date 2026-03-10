@@ -281,7 +281,6 @@ def calculate_indicators_with_extras(
     
     return result
 
-
 def calculate_adx(
     high: pd.Series,
     low: pd.Series,
@@ -289,71 +288,89 @@ def calculate_adx(
     period: int = 14
 ) -> pd.DataFrame:
     """
-    Calculate Average Directional Index (ADX), DI+, and DI-.
-    
+    Calculate Average Directional Index (ADX), DI+, and DI-
+    matching Pine Script's implementation exactly.
+
     Args:
         high: High prices
         low: Low prices
         close: Close prices
         period: Lookback period (default 14)
-    
+
     Returns:
-        DataFrame with ADX, DI+, DI- columns
+        DataFrame with adx, di_plus, di_minus columns
     """
-def calculate_adx(
-    high: pd.Series,
-    low: pd.Series,
-    close: pd.Series,
-    period: int = 14
-) -> pd.DataFrame:
-    """
-    Calculate Average Directional Index (ADX), DI+, and DI-.
-    
-    Args:
-        high: High prices
-        low: Low prices
-        close: Close prices
-        period: Lookback period (default 14)
-    
-    Returns:
-        DataFrame with ADX, DI+, DI- columns
-    """
-    # Calculate +DM and -DM
-    high_diff = high.diff()
-    low_diff = -low.diff()
-    plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
-    minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
 
-    # True Range
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
+        """
+        Wilder's smoothing: smoothed = prev - (prev / period) + current
+        First bar seeds with its own value (nz behavior).
+        Falls back to current value if prev is NaN.
+        """
+        result = pd.Series(np.nan, index=series.index)
 
-    # Smooth TR, +DM, -DM using pandas ewm (equivalent to Wilder smoothing)
-    alpha = 1.0 / period
-    smoothed_tr = tr.ewm(alpha=alpha, adjust=False).mean()
-    smoothed_plus_dm = plus_dm.ewm(alpha=alpha, adjust=False).mean()
-    smoothed_minus_dm = minus_dm.ewm(alpha=alpha, adjust=False).mean()
+        for i in range(len(series)):
+            if i == 0:
+                result.iloc[i] = series.iloc[i]
+            else:
+                prev = result.iloc[i - 1]
+                # Match Pine Script nz(): if prev is NaN, treat as current value
+                prev = series.iloc[i] if pd.isna(prev) else prev
+                result.iloc[i] = prev - (prev / period) + series.iloc[i]
 
-    # +DI and -DI
-    plus_di = 100 * (smoothed_plus_dm / smoothed_tr)
-    minus_di = 100 * (smoothed_minus_dm / smoothed_tr)
+        return result
 
-    # DX
-    di_sum = plus_di + minus_di
-    dx = 100 * (plus_di - minus_di).abs() / di_sum
-    dx = dx.where(di_sum != 0, np.nan)  # Avoid division by zero
+    # ── True Range ────────────────────────────────────────────────────────────
+    # Use fillna(close) on shift to match Pine Script's nz(close[1]) on bar 0
+    prev_close = close.shift(1).fillna(close)
 
-    # ADX: ewm of DX
-    adx = dx.ewm(alpha=alpha, adjust=False).mean()
+    high_low        = high - low
+    high_prev_close = (high - prev_close).abs()
+    low_prev_close  = (low  - prev_close).abs()
+
+    tr = pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(axis=1)
+
+    # ── Directional Movement ──────────────────────────────────────────────────
+    # Use fillna to match Pine Script's nz(high[1]) and nz(low[1]) on bar 0
+    prev_high = high.shift(1).fillna(high)
+    prev_low  = low.shift(1).fillna(low)
+
+    high_diff = high - prev_high   # high - high[1]
+    low_diff  = prev_low - low     # low[1] - low
+
+    # DM+ = high_diff > low_diff AND high_diff > 0 → max(high_diff, 0), else 0
+    plus_dm  = pd.Series(0.0, index=high.index)
+    minus_dm = pd.Series(0.0, index=high.index)
+
+    dm_plus_cond  = (high_diff > low_diff)  & (high_diff > 0)
+    dm_minus_cond = (low_diff  > high_diff) & (low_diff  > 0)
+
+    plus_dm[dm_plus_cond]   = high_diff[dm_plus_cond].clip(lower=0)
+    minus_dm[dm_minus_cond] = low_diff[dm_minus_cond].clip(lower=0)
+
+    # ── Wilder Smoothing ──────────────────────────────────────────────────────
+    smoothed_tr       = wilder_smooth(tr,       period)
+    smoothed_plus_dm  = wilder_smooth(plus_dm,  period)
+    smoothed_minus_dm = wilder_smooth(minus_dm, period)
+
+    # ── DI+ and DI- ───────────────────────────────────────────────────────────
+    smoothed_tr_safe = smoothed_tr.replace(0, np.nan)
+
+    di_plus  = (smoothed_plus_dm  / smoothed_tr_safe * 100).fillna(0)
+    di_minus = (smoothed_minus_dm / smoothed_tr_safe * 100).fillna(0)
+
+    # ── DX ────────────────────────────────────────────────────────────────────
+    di_sum = (di_plus + di_minus).replace(0, np.nan)
+    dx = ((di_plus - di_minus).abs() / di_sum * 100).fillna(0)
+
+    # ── ADX = SMA of DX (matches Pine Script's ta.sma) ───────────────────────
+    adx = dx.rolling(window=period, min_periods=1).mean()
 
     return pd.DataFrame({
-        'adx': adx,
-        'di_plus': plus_di,
-        'di_minus': minus_di
+        'adx':      adx,
+        'di_plus':  di_plus,
+        'di_minus': di_minus
     }, index=high.index)
-
 
 def calculate_pivot_channel(
     high: pd.Series,
