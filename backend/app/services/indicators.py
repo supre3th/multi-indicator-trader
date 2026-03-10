@@ -192,9 +192,52 @@ def calculate_indicators_with_extras(
     df.loc[df['mfi'] > df['mfi_upper'], 'mfi_zone'] = 'overbought'
     df.loc[df['mfi'] < df['mfi_lower'], 'mfi_zone'] = 'oversold'
     
+    # === ADX Calculation ===
+    # Calculate +DM and -DM
+    high_diff = df['high'].diff()
+    low_diff = -df['low'].diff()
+    
+    plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
+    minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
+    
+    # True range
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift(1))
+    tr3 = abs(df['low'] - df['close'].shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Smoothed values using Wilder's smoothing
+    def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
+        """Apply Wilder's smoothing technique."""
+        result = series.copy()
+        result.iloc[period] = series.iloc[:period+1].sum()
+        for i in range(period + 1, len(series)):
+            result.iloc[i] = result.iloc[i-1] - (result.iloc[i-1] / period) + series.iloc[i]
+        return result
+    
+    # Smooth TR, +DM, -DM
+    smoothed_tr = wilder_smooth(tr, 14)
+    smoothed_plus_dm = wilder_smooth(plus_dm, 14)
+    smoothed_minus_dm = wilder_smooth(minus_dm, 14)
+    
+    # +DI and -DI
+    plus_di = 100 * (smoothed_plus_dm / smoothed_tr)
+    minus_di = 100 * (smoothed_minus_dm / smoothed_tr)
+    
+    # DX
+    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+    
+    # ADX (smoothed DX)
+    adx = wilder_smooth(dx, 14)
+    
+    df['adx'] = adx
+    df['di_plus'] = plus_di
+    df['di_minus'] = minus_di
+    
     # Result
     result = df[['time', 'open', 'high', 'low', 'close', 'volume', 
                   'cci', 'mfi', 'cci_ma', 'bb_upper', 'bb_lower',
+                  'adx', 'di_plus', 'di_minus',
                   'cci_upper', 'cci_lower', 'mfi_upper', 'mfi_lower',
                   'cci_cross_above', 'cci_cross_below', 'mfi_cross_above', 'mfi_cross_below',
                   'mfi_zone']].to_dict(orient='records')

@@ -35,10 +35,12 @@ class IndicatorValue(BaseModel):
     low: float
     close: float
     volume: float
-    # MFI
-    mfi: Optional[float] = None
-    # CCI
+    # CCI + MFI (PineScript)
     cci: Optional[float] = None
+    mfi: Optional[float] = None
+    cci_ma: Optional[float] = None  # CCI smoothing MA
+    bb_upper: Optional[float] = None  # Bollinger upper
+    bb_lower: Optional[float] = None  # Bollinger lower
     # ADX/DI
     adx: Optional[float] = None
     di_plus: Optional[float] = None
