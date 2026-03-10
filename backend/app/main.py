@@ -5,7 +5,7 @@ Provides REST API endpoints for fetching market data from Binance.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import klines
+from app.api import klines, indicators
 
 app = FastAPI(
     title="Trading Indicators API",
@@ -24,6 +24,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(klines.router, prefix="/api", tags=["klines"])
+app.include_router(indicators.router, prefix="/api", tags=["indicators"])
 
 
 @app.get("/")
