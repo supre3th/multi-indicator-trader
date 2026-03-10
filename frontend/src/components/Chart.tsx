@@ -350,7 +350,7 @@ export function Chart() {
     : null;
 
   // Debug state for on-screen display
-  const [debugStatus, setDebugStatus] = useState<string[]>('Initializing...');
+  const [debugStatus, setDebugStatus] = useState<string[]>(['Starting...']);
 
   const addStatus = (msg: string) => {
     setDebugStatus(prev => [...prev.slice(-4), msg]); // Keep last 5 messages
