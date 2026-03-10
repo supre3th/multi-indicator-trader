@@ -171,9 +171,10 @@ def calculate_indicators_with_extras(
         df['bb_lower'] = None
     
     # === Threshold levels (scaled) ===
-    # PineScript uses ±60 for both CCI and MFI (scaled from ±100)
-    df['cci_upper'] = 60
-    df['cci_lower'] = -60
+    # PineScript uses ±60 for MFI thresholds (scaled from ±100)
+    # CCI bands at ±100
+    df['cci_band_upper'] = 100
+    df['cci_band_lower'] = -100
     df['mfi_upper'] = 60
     df['mfi_lower'] = -60
     
@@ -238,8 +239,8 @@ def calculate_indicators_with_extras(
     result = df[['time', 'open', 'high', 'low', 'close', 'volume', 
                   'cci', 'mfi', 'cci_ma', 'bb_upper', 'bb_lower',
                   'adx', 'di_plus', 'di_minus',
-                  'cci_upper', 'cci_lower', 'mfi_upper', 'mfi_lower',
-                  'cci_cross_above', 'cci_cross_below', 'mfi_cross_above', 'mfi_cross_below',
+                  'cci_band_upper', 'cci_band_lower', 'mfi_upper', 'mfi_lower',
+                  'mfi_cross_above', 'mfi_cross_below',
                   'mfi_zone']].to_dict(orient='records')
     
     # Convert numpy types

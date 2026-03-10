@@ -45,6 +45,14 @@ class IndicatorValue(BaseModel):
     adx: Optional[float] = None
     di_plus: Optional[float] = None
     di_minus: Optional[float] = None
+    # Threshold lines
+    cci_band_upper: Optional[float] = None  # +100
+    cci_band_lower: Optional[float] = None  # -100
+    mfi_upper: Optional[float] = None  # +60
+    mfi_lower: Optional[float] = None  # -60
+    # Crossover signals
+    mfi_cross_above: Optional[bool] = None
+    mfi_cross_below: Optional[bool] = None
     # Price Channel
     channel_upper: Optional[float] = None
     channel_middle: Optional[float] = None
