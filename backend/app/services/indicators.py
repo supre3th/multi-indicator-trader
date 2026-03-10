@@ -16,10 +16,10 @@ def calculate_mfi(
     scaled: bool = True
 ) -> pd.Series:
     """
-    Calculate Money Flow Index (MFI).
+    1:1 translation of PineScript MFI:
     
-    MFI = 100 - (100 / (1 + Money Ratio))
-    Money Ratio = Positive Money Flow / Negative Money Flow
+    mfiRaw = ta.mfi(hlc3, mfiLength)
+    mfi = (mfiRaw - 50) * 2  // Scale to -100 to +100
     
     Args:
         high: High prices
@@ -32,34 +32,37 @@ def calculate_mfi(
     Returns:
         MFI values (scaled to -100 to +100 range if scaled=True)
     """
-    # Use typical price (hlc3) as source - matches PineScript
+    # Use typical price (hlc3) - matches PineScript
     typical_price = (high + low + close) / 3
     
-    # Raw money flow
+    # Raw money flow = typical_price * volume
     raw_money_flow = typical_price * volume
     
-    # Money flow direction
-    money_flow_direction = typical_price.diff()
-    money_flow_direction = money_flow_direction.apply(
+    # Money flow direction: positive if typical_price increased, negative if decreased
+    price_change = typical_price.diff()
+    money_flow_direction = price_change.apply(
         lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
     )
     
-    signed_money_flow = raw_money_flow * money_flow_direction
+    # Signed money flow
+    signed_mf = raw_money_flow * money_flow_direction
     
     # Positive and negative money flows
-    positive_mf = signed_money_flow.apply(lambda x: x if x > 0 else 0)
-    negative_mf = signed_money_flow.apply(lambda x: abs(x) if x < 0 else 0)
+    positive_mf = signed_mf.apply(lambda x: x if x > 0 else 0)
+    negative_mf = signed_mf.apply(lambda x: abs(x) if x < 0 else 0)
     
     # Rolling sums
     positive_mf_sum = positive_mf.rolling(window=period).sum()
     negative_mf_sum = negative_mf.rolling(window=period).sum()
     
-    # Money ratio and MFI
-    money_ratio = positive_mf_sum / negative_mf_sum
+    # Handle division by zero - set to large value when no negative flow
+    money_ratio = positive_mf_sum / negative_mf_sum.replace(0, np.nan)
+    money_ratio = money_ratio.fillna(999999999)
+    
+    # MFI = 100 - (100 / (1 + money_ratio))
     mfi = 100 - (100 / (1 + money_ratio))
     
-    # Scale from 0-100 to -100 to +100 to match CCI range (PineScript logic)
-    # MFI 0 → -100, MFI 50 → 0, MFI 100 → +100
+    # Scale from 0-100 to -100 to +100 (PineScript formula: (mfi - 50) * 2)
     if scaled:
         mfi = (mfi - 50) * 2
     
@@ -73,9 +76,13 @@ def calculate_cci(
     period: int = 20
 ) -> pd.Series:
     """
-    Calculate Commodity Channel Index (CCI).
+    1:1 translation of PineScript CCI:
     
-    CCI = (Typical Price - SMA(Typical Price)) / (0.015 * Mean Deviation)
+    cciSrc = hlc3  // (high + low + close) / 3
+    cciMA = ta.sma(cciSrc, cciLength)
+    cci = (cciSrc - cciMA) / (0.015 * ta.dev(cciSrc, cciLength))
+    
+    Note: PineScript uses stdev (ta.dev), NOT mean deviation!
     
     Args:
         high: High prices
@@ -86,18 +93,17 @@ def calculate_cci(
     Returns:
         CCI values
     """
-    typical_price = (high + low + close) / 3
+    # Use hlc3 (typical price) - matches PineScript exactly
+    hlc3 = (high + low + close) / 3
     
-    # Simple moving average of typical price
-    sma = typical_price.rolling(window=period).mean()
+    # SMA of hlc3
+    cci_ma = hlc3.rolling(window=period).mean()
     
-    # Mean deviation
-    mean_deviation = typical_price.rolling(window=period).apply(
-        lambda x: np.mean(np.abs(x - x.mean())), raw=True
-    )
+    # Standard deviation (NOT mean deviation - PineScript uses ta.dev)
+    std_dev = hlc3.rolling(window=period).std()
     
-    # CCI
-    cci = (typical_price - sma) / (0.015 * mean_deviation)
+    # CCI = (src - sma) / (0.015 * stdev)
+    cci = (hlc3 - cci_ma) / (0.015 * std_dev)
     
     return cci
 
