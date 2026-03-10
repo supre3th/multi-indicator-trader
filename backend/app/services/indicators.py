@@ -234,31 +234,15 @@ def calculate_indicators_with_extras(
         index=df.index
     )
     
-    # Wilder's Smoothing (RMA) - PineScript implementation
-    # SmoothedValue = nz(SmoothedValue[1]) - (nz(SmoothedValue[1]) / length) + CurrentValue
-    def wilder_smooth_pinescript(series: pd.Series, period: int) -> pd.Series:
-        """PineScript's Wilder smoothing (RMA) - 1:1 implementation."""
-        result = pd.Series(np.nan, index=series.index)
-        
-        # First value is the sum of first 'period' values (PineScript: nz(prev, 0) then accumulate)
-        first_valid = series.iloc[:period].sum()
-        result.iloc[period - 1] = first_valid
-        
-        # Apply Wilder's formula: (prev * (period - 1) + current) / period
-        for i in range(period, len(series)):
-            prev_value = result.iloc[i - 1]
-            if pd.isna(prev_value):
-                prev_value = series.iloc[:i].mean() * period  # Fallback
-            result.iloc[i] = (prev_value * (period - 1) + series.iloc[i]) / period
-        
-        return result
-    
     period = 14
     
-    # Smooth TR, +DM, -DM
-    smoothed_tr = wilder_smooth_pinescript(true_range, period)
-    smoothed_plus_dm = wilder_smooth_pinescript(plus_dm, period)
-    smoothed_minus_dm = wilder_smooth_pinescript(minus_dm, period)
+    # Wilder's Smoothing using pandas ewm (equivalent to PineScript's ta.rma)
+    # alpha = 1/period gives Wilder smoothing behavior
+    alpha = 1.0 / period
+    
+    smoothed_tr = true_range.ewm(alpha=alpha, adjust=False).mean()
+    smoothed_plus_dm = plus_dm.ewm(alpha=alpha, adjust=False).mean()
+    smoothed_minus_dm = minus_dm.ewm(alpha=alpha, adjust=False).mean()
     
     # DI+ and DI- (multiply by 100)
     # DIPlus = SmoothedDirectionalMovementPlus / SmoothedTrueRange * 100
@@ -270,9 +254,8 @@ def calculate_indicators_with_extras(
     di_sum = pd.Series(di_plus + di_minus).replace(0, np.nan)
     dx = pd.Series(100 * np.abs(di_plus - di_minus) / di_sum, index=df.index)
     
-    # ADX = Wilder's smoothing (RMA) of DX - NOT SMA!
-    # PineScript: ta.rma(dx, adxLen) or ta.wma with specific formula
-    adx = wilder_smooth_pinescript(dx.fillna(0), period)
+    # ADX = Wilder's smoothing (RMA) of DX - use ewm
+    adx = dx.ewm(alpha=alpha, adjust=False).mean()
     
     df['adx'] = adx
     df['di_plus'] = di_plus
@@ -317,60 +300,59 @@ def calculate_adx(
     Returns:
         DataFrame with ADX, DI+, DI- columns
     """
+def calculate_adx(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = 14
+) -> pd.DataFrame:
+    """
+    Calculate Average Directional Index (ADX), DI+, and DI-.
+    
+    Args:
+        high: High prices
+        low: Low prices
+        close: Close prices
+        period: Lookback period (default 14)
+    
+    Returns:
+        DataFrame with ADX, DI+, DI- columns
+    """
     # Calculate +DM and -DM
     high_diff = high.diff()
     low_diff = -low.diff()
-    
     plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
     minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
-    
-    # True range
+
+    # True Range
     tr1 = high - low
-    tr2 = abs(high - close.shift(1))
-    tr3 = abs(low - close.shift(1))
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    
-    # Smoothed values using Wilder's smoothing
-    def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
-        """Apply Wilder's smoothing technique (RMA) - 1:1 PineScript implementation."""
-        result = pd.Series(np.nan, index=series.index)
-        
-        # First valid value is the sum of first 'period' values
-        # In PineScript: SmoothedValue[period-1] = sum(series[0:period])
-        first_sum = series.iloc[:period].sum()
-        result.iloc[period - 1] = first_sum
-        
-        # Apply Wilder's formula: (prev * (period - 1) + current) / period
-        for i in range(period, len(series)):
-            prev_value = result.iloc[i - 1]
-            if pd.isna(prev_value):
-                prev_value = series.iloc[:i].mean() * period  # Fallback
-            result.iloc[i] = (prev_value * (period - 1) + series.iloc[i]) / period
-        
-        return result
-    
-    # Smooth TR, +DM, -DM
-    smoothed_tr = wilder_smooth(tr, period)
-    smoothed_plus_dm = wilder_smooth(plus_dm, period)
-    smoothed_minus_dm = wilder_smooth(minus_dm, period)
-    
+
+    # Smooth TR, +DM, -DM using pandas ewm (equivalent to Wilder smoothing)
+    alpha = 1.0 / period
+    smoothed_tr = tr.ewm(alpha=alpha, adjust=False).mean()
+    smoothed_plus_dm = plus_dm.ewm(alpha=alpha, adjust=False).mean()
+    smoothed_minus_dm = minus_dm.ewm(alpha=alpha, adjust=False).mean()
+
     # +DI and -DI
     plus_di = 100 * (smoothed_plus_dm / smoothed_tr)
     minus_di = 100 * (smoothed_minus_dm / smoothed_tr)
-    
+
     # DX
-    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-    
-    # ADX (smoothed DX)
-    adx = wilder_smooth(dx, period)
-    
-    result = pd.DataFrame({
+    di_sum = plus_di + minus_di
+    dx = 100 * (plus_di - minus_di).abs() / di_sum
+    dx = dx.where(di_sum != 0, np.nan)  # Avoid division by zero
+
+    # ADX: ewm of DX
+    adx = dx.ewm(alpha=alpha, adjust=False).mean()
+
+    return pd.DataFrame({
         'adx': adx,
         'di_plus': plus_di,
         'di_minus': minus_di
     }, index=high.index)
-    
-    return result
 
 
 def calculate_pivot_channel(
