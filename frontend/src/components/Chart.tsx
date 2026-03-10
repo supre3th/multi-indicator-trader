@@ -59,14 +59,14 @@ export function Chart() {
 
   // Initialize chart
   useEffect(() => {
-    log('Initializing chart, container:', chartContainerRef.current ? 'exists' : 'NULL');
+    addStatus('Effect: Initializing chart');
     
     if (!chartContainerRef.current) {
-      logError('No chart container ref!');
+      addStatus('ERROR: No container ref!');
       return;
     }
 
-    log('Creating chart with theme:', theme);
+    addStatus(`Creating chart (theme: ${theme})`);
     const chart = createChart(chartContainerRef.current, {
       grid: {
         vertLines: { color: theme === 'dark' ? '#1f2937' : '#e5e7eb' },
@@ -196,13 +196,13 @@ export function Chart() {
 
   // Fetch data when symbol or timeframe changes
   const loadData = useCallback(async () => {
-    log('loadData called, symbol:', symbol, 'timeframe:', timeframe);
+    addStatus(`loadData: ${symbol} ${timeframe}`);
     setIsLoading(true);
     try {
       // Fetch candlestick data
-      log('Fetching klines from API...');
+      addStatus('Fetching klines...');
       const data = await fetchKlines(symbol, timeframe, 200);
-      log('Got klines:', data.length, 'candles');
+      addStatus(`Got ${data.length} candles`);
       setCandles(data);
 
       if (candlestickSeriesRef.current) {
@@ -349,8 +349,23 @@ export function Chart() {
     ? indicatorData[indicatorData.length - 1] 
     : null;
 
+  // Debug state for on-screen display
+  const [debugStatus, setDebugStatus] = useState<string[]>('Initializing...');
+
+  const addStatus = (msg: string) => {
+    setDebugStatus(prev => [...prev.slice(-4), msg]); // Keep last 5 messages
+  };
+
   return (
     <div className="relative w-full h-full">
+      {/* Debug status overlay - visible for testing */}
+      <div className="absolute top-16 left-2 z-50 bg-black/80 text-green-400 text-xs p-2 rounded font-mono max-w-xs">
+        <div className="font-bold mb-1">Debug Status:</div>
+        {debugStatus.map((msg, i) => (
+          <div key={i}>{msg}</div>
+        ))}
+      </div>
+      
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-10">
           <div className="px-4 py-2 bg-zinc-900 dark:bg-zinc-800 text-white text-sm rounded-md">
