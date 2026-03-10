@@ -35,19 +35,20 @@
 
 **Goal:** Implement the 4 momentum/trend indicators
 
-**Status:** In Progress (03/04 plans complete)
+**Status:** Complete (04/04 plans complete)
 
 **Requirements addressed:**
 - [x] MFI (Money Flow Index)
 - [x] CCI (Commodity Channel Index)
 - [x] ADX (Average Directional Index)
 - [x] Price Channel (dynamic pivot-based with MTF)
+- [x] Setup detection table with background tints
 
 **Plans:**
 - [x] 02-01-PLAN.md — Backend indicator calculations (MFI, CCI, ADX, DI)
 - [x] 02-02-PLAN.md — Frontend indicator panes (CCI+MFI, ADX+DI panes)
 - [x] 02-03-PLAN.md — Price Channel + MTF support
-- [ ] 02-04-PLAN.md — Settings UI + Setup Table overlay
+- [x] 02-04-PLAN.md — Settings UI + Setup Table overlay
 
 ---
 
@@ -83,4 +84,4 @@
 
 ---
 
-*Last updated: 2026-03-10 (Plan 02-03 complete)*
+*Last updated: 2026-03-10 (Phase 02 complete - 4/4 plans)*
