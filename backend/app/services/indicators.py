@@ -1,10 +1,11 @@
 """
 Indicator calculation service using pandas.
 Calculates MFI, CCI, ADX, DI+, DI-, and Price Channel indicators.
+Full 1:1 translation of PineScript CCI + MFI Combined indicator.
 """
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 
 def calculate_mfi(
@@ -12,40 +13,25 @@ def calculate_mfi(
     low: pd.Series,
     close: pd.Series,
     volume: pd.Series,
-    period: int = 14,
-    scaled: bool = True
+    period: int = 14
 ) -> pd.Series:
     """
-    1:1 translation of PineScript MFI:
+    Money Flow Index (MFI) - 1:1 PineScript translation.
     
-    mfiRaw = ta.mfi(hlc3, mfiLength)
-    mfi = (mfiRaw - 50) * 2  // Scale to -100 to +100
-    
-    Args:
-        high: High prices
-        low: Low prices
-        close: Close prices
-        volume: Volume
-        period: Lookback period (default 14)
-        scaled: If True, scale from 0-100 to -100 to +100 to match CCI (default True)
-    
-    Returns:
-        MFI values (scaled to -100 to +100 range if scaled=True)
+    Uses hlc3 as source and scales to -100 to +100 range.
     """
-    # Use typical price (hlc3) - matches PineScript
-    typical_price = (high + low + close) / 3
+    # hlc3 = typical price
+    hlc3 = (high + low + close) / 3
     
-    # Raw money flow = typical_price * volume
-    raw_money_flow = typical_price * volume
+    # Raw money flow = hlc3 * volume
+    raw_money_flow = hlc3 * volume
     
-    # Money flow direction: positive if typical_price increased, negative if decreased
-    price_change = typical_price.diff()
-    money_flow_direction = price_change.apply(
-        lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
-    )
+    # Money flow direction based on hlc3 change
+    mf_change = hlc3.diff()
+    mf_direction = pd.Series(np.where(mf_change > 0, 1, np.where(mf_change < 0, -1, 0)), index=hlc3.index)
     
     # Signed money flow
-    signed_mf = raw_money_flow * money_flow_direction
+    signed_mf = raw_money_flow * mf_direction
     
     # Positive and negative money flows
     positive_mf = signed_mf.apply(lambda x: x if x > 0 else 0)
@@ -55,16 +41,16 @@ def calculate_mfi(
     positive_mf_sum = positive_mf.rolling(window=period).sum()
     negative_mf_sum = negative_mf.rolling(window=period).sum()
     
-    # Handle division by zero - set to large value when no negative flow
+    # Money ratio with zero handling
     money_ratio = positive_mf_sum / negative_mf_sum.replace(0, np.nan)
     money_ratio = money_ratio.fillna(999999999)
     
     # MFI = 100 - (100 / (1 + money_ratio))
     mfi = 100 - (100 / (1 + money_ratio))
     
-    # Scale from 0-100 to -100 to +100 (PineScript formula: (mfi - 50) * 2)
-    if scaled:
-        mfi = (mfi - 50) * 2
+    # Scale from 0-100 to -100 to +100
+    # PineScript: mfi = (mfiRaw - 50) * 2
+    mfi = (mfi - 50) * 2
     
     return mfi
 
@@ -76,36 +62,145 @@ def calculate_cci(
     period: int = 20
 ) -> pd.Series:
     """
-    1:1 translation of PineScript CCI:
+    Commodity Channel Index (CCI) - 1:1 PineScript translation.
     
-    cciSrc = hlc3  // (high + low + close) / 3
-    cciMA = ta.sma(cciSrc, cciLength)
-    cci = (cciSrc - cciMA) / (0.015 * ta.dev(cciSrc, cciLength))
-    
-    Note: PineScript uses stdev (ta.dev), NOT mean deviation!
-    
-    Args:
-        high: High prices
-        low: Low prices
-        close: Close prices
-        period: Lookback period (default 20)
-    
-    Returns:
-        CCI values
+    Uses hlc3 as source, SMA, and standard deviation.
+    CCI = (hlc3 - SMA(hlc3)) / (0.015 * STDEV(hlc3))
     """
-    # Use hlc3 (typical price) - matches PineScript exactly
+    # hlc3 = typical price
     hlc3 = (high + low + close) / 3
     
     # SMA of hlc3
     cci_ma = hlc3.rolling(window=period).mean()
     
-    # Standard deviation (NOT mean deviation - PineScript uses ta.dev)
+    # Standard deviation (PineScript ta.dev)
     std_dev = hlc3.rolling(window=period).std()
+    
+    # Replace zero std_dev with NaN to avoid division by zero
+    std_dev = std_dev.replace(0, np.nan)
     
     # CCI = (src - sma) / (0.015 * stdev)
     cci = (hlc3 - cci_ma) / (0.015 * std_dev)
     
     return cci
+
+
+def calculate_indicators_with_extras(
+    klines: List,
+    cci_period: int = 20,
+    mfi_period: int = 14,
+    ma_type: str = "SMA",
+    ma_length: int = 14,
+    bb_mult: float = 2.0
+) -> Dict[str, Any]:
+    """
+    Full PineScript CCI + MFI Combined indicator with all extras:
+    - CCI and MFI (both scaled to -100 to +100)
+    - CCI SMA (optional MA on CCI)
+    - Bollinger Bands around CCI SMA
+    - Threshold levels at ±60
+    
+    Args:
+        klines: List of kline tuples
+        cci_period: CCI period (default 20)
+        mfi_period: MFI period (default 14)
+        ma_type: MA type for CCI smoothing ("None", "SMA", "EMA", "WMA", "SMMA")
+        ma_length: MA period for CCI smoothing
+        bb_mult: Bollinger Bands multiplier
+    
+    Returns:
+        Dictionary with all indicator values
+    """
+    # Create DataFrame
+    df = pd.DataFrame(klines, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+    
+    for col in ['open', 'high', 'low', 'close', 'volume']:
+        df[col] = pd.to_numeric(df[col])
+    
+    hlc3 = (df['high'] + df['low'] + df['close']) / 3
+    
+    # === CCI ===
+    # CCI = (hlc3 - SMA(hlc3)) / (0.015 * STDEV(hlc3))
+    cci_ma = hlc3.rolling(window=cci_period).mean()
+    cci_std = hlc3.rolling(window=cci_period).std().replace(0, np.nan)
+    df['cci'] = (hlc3 - cci_ma) / (0.015 * cci_std)
+    
+    # === MFI ===
+    # MFI: raw = ta.mfi(hlc3, period), scaled = (raw - 50) * 2
+    raw_mf = hlc3 * df['volume']
+    mf_change = hlc3.diff()
+    mf_direction = pd.Series(np.where(mf_change > 0, 1, np.where(mf_change < 0, -1, 0)), index=df.index)
+    signed_mf = raw_mf * mf_direction
+    positive_mf = signed_mf.apply(lambda x: x if x > 0 else 0).rolling(window=mfi_period).sum()
+    negative_mf = signed_mf.apply(lambda x: abs(x) if x < 0 else 0).rolling(window=mfi_period).sum()
+    mfi_ratio = positive_mf / negative_mf.replace(0, np.nan)
+    mfi_raw = 100 - (100 / (1 + mfi_ratio.fillna(999999999)))
+    df['mfi'] = (mfi_raw - 50) * 2  # Scaled to -100 to +100
+    
+    # === CCI MA (optional smoothing) ===
+    if ma_type == "SMA":
+        df['cci_ma'] = df['cci'].rolling(window=ma_length).mean()
+    elif ma_type == "EMA":
+        df['cci_ma'] = df['cci'].ewm(span=ma_length, adjust=False).mean()
+    elif ma_type == "WMA":
+        weights = np.arange(1, ma_length + 1)
+        df['cci_ma'] = df['cci'].rolling(window=ma_length).apply(
+            lambda x: np.sum(weights * x) / weights.sum() if len(x) == ma_length else np.nan, raw=True
+        )
+    elif ma_type == "SMMA" or ma_type == "RMA":
+        df['cci_ma'] = df['cci'].ewm(alpha=1/ma_length, adjust=False).mean()
+    else:
+        df['cci_ma'] = None
+    
+    # === Bollinger Bands around CCI MA ===
+    if df['cci_ma'] is not None and not df['cci_ma'].isna().all():
+        bb_std = df['cci'].rolling(window=ma_length).std()
+        df['bb_upper'] = df['cci_ma'] + (bb_std * bb_mult)
+        df['bb_lower'] = df['cci_ma'] - (bb_std * bb_mult)
+    else:
+        df['bb_upper'] = None
+        df['bb_lower'] = None
+    
+    # === Threshold levels (scaled) ===
+    # PineScript uses ±60 for both CCI and MFI (scaled from ±100)
+    df['cci_upper'] = 60
+    df['cci_lower'] = -60
+    df['mfi_upper'] = 60
+    df['mfi_lower'] = -60
+    
+    # === Crossover detection ===
+    # CCI crossing above/below upper threshold
+    df['cci_cross_above'] = (df['cci'] > df['cci_upper']) & (df['cci'].shift(1) <= df['cci_upper'])
+    df['cci_cross_below'] = (df['cci'] < df['cci_lower']) & (df['cci'].shift(1) >= df['cci_lower'])
+    
+    # MFI crossing above/below threshold
+    df['mfi_cross_above'] = (df['mfi'] > df['mfi_upper']) & (df['mfi'].shift(1) <= df['mfi_upper'])
+    df['mfi_cross_below'] = (df['mfi'] < df['mfi_lower']) & (df['mfi'].shift(1) >= df['mfi_lower'])
+    
+    # === Background zones ===
+    # MFI overbought (>60) = red, oversold (<-60) = green
+    df['mfi_zone'] = 'neutral'
+    df.loc[df['mfi'] > df['mfi_upper'], 'mfi_zone'] = 'overbought'
+    df.loc[df['mfi'] < df['mfi_lower'], 'mfi_zone'] = 'oversold'
+    
+    # Result
+    result = df[['time', 'open', 'high', 'low', 'close', 'volume', 
+                  'cci', 'mfi', 'cci_ma', 'bb_upper', 'bb_lower',
+                  'cci_upper', 'cci_lower', 'mfi_upper', 'mfi_lower',
+                  'cci_cross_above', 'cci_cross_below', 'mfi_cross_above', 'mfi_cross_below',
+                  'mfi_zone']].to_dict(orient='records')
+    
+    # Convert numpy types
+    for row in result:
+        for key, value in row.items():
+            if pd.isna(value) or value is None:
+                row[key] = None
+            elif isinstance(value, (np.integer, np.floating)):
+                row[key] = float(value) if isinstance(value, np.floating) else int(value)
+            elif isinstance(value, (np.bool_, bool)):
+                row[key] = bool(value)
+    
+    return result
 
 
 def calculate_adx(
