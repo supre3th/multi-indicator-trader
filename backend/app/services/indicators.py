@@ -189,48 +189,91 @@ def calculate_indicators_with_extras(
     df.loc[df['mfi'] > df['mfi_upper'], 'mfi_zone'] = 'overbought'
     df.loc[df['mfi'] < df['mfi_lower'], 'mfi_zone'] = 'oversold'
     
-    # === ADX Calculation ===
-    # Calculate +DM and -DM
-    high_diff = df['high'].diff()
-    low_diff = -df['low'].diff()
+    # === ADX Calculation - 1:1 PineScript Translation ===
+    # PineScript:
+    # TrueRange = math.max(math.max(high - low, math.abs(high - nz(close[1]))), math.abs(low - nz(close[1])))
+    # DirectionalMovementPlus = high - nz(high[1]) > nz(low[1]) - low ? math.max(high - nz(high[1]), 0) : 0
+    # DirectionalMovementMinus = nz(low[1]) - low > high - nz(high[1]) ? math.max(nz(low[1]) - low, 0) : 0
     
-    plus_dm = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0)
-    minus_dm = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0)
+    high = df['high']
+    low = df['low']
+    close = df['close']
     
-    # True range
-    tr1 = df['high'] - df['low']
-    tr2 = abs(df['high'] - df['close'].shift(1))
-    tr3 = abs(df['low'] - df['close'].shift(1))
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    # Previous values (nz = 0 if na)
+    prev_high = high.shift(1).fillna(0)
+    prev_low = low.shift(1).fillna(0)
+    prev_close = close.shift(1).fillna(0)
     
-    # Smoothed values using Wilder's smoothing
-    def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
-        """Apply Wilder's smoothing technique."""
-        result = series.copy()
-        result.iloc[period] = series.iloc[:period+1].sum()
-        for i in range(period + 1, len(series)):
-            result.iloc[i] = result.iloc[i-1] - (result.iloc[i-1] / period) + series.iloc[i]
+    # True Range
+    tr1 = high - low
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Directional Movement - PineScript 1:1
+    # +DM = high - prev_high > prev_low - low ? max(high - prev_high, 0) : 0
+    dm_plus_raw = high - prev_high
+    dm_minus_raw = prev_low - low
+    
+    # PineScript conditions using np.where
+    plus_dm = pd.Series(
+        np.where(
+            dm_plus_raw > dm_minus_raw,
+            np.maximum(dm_plus_raw, 0),
+            0
+        ),
+        index=df.index
+    )
+    
+    minus_dm = pd.Series(
+        np.where(
+            dm_minus_raw > dm_plus_raw,
+            np.maximum(dm_minus_raw, 0),
+            0
+        ),
+        index=df.index
+    )
+    
+    # Wilder's Smoothing (RMA) - PineScript implementation
+    # SmoothedValue = nz(SmoothedValue[1]) - (nz(SmoothedValue[1]) / length) + CurrentValue
+    def wilder_smooth_pinescript(series: pd.Series, period: int) -> pd.Series:
+        """PineScript's Wilder smoothing (RMA) - 1:1 implementation."""
+        result = pd.Series(0.0, index=series.index)
+        
+        # First value is the sum of first 'period' values (PineScript: nz(prev, 0) then accumulate)
+        first_valid = series.iloc[:period].sum()
+        result.iloc[period-1] = first_valid
+        
+        # Apply Wilder's formula: prev - (prev / period) + current
+        for i in range(period, len(series)):
+            prev_value = result.iloc[i-1] if not pd.isna(result.iloc[i-1]) else 0
+            result.iloc[i] = prev_value - (prev_value / period) + series.iloc[i]
+        
         return result
     
-    # Smooth TR, +DM, -DM
-    smoothed_tr = wilder_smooth(tr, 14)
-    smoothed_plus_dm = wilder_smooth(plus_dm, 14)
-    smoothed_minus_dm = wilder_smooth(minus_dm, 14)
+    period = 14
     
-    # +DI and -DI
-    plus_di = 100 * (smoothed_plus_dm / smoothed_tr)
-    minus_di = 100 * (smoothed_minus_dm / smoothed_tr)
+    # Smooth TR, +DM, -DM
+    smoothed_tr = wilder_smooth_pinescript(true_range, period)
+    smoothed_plus_dm = wilder_smooth_pinescript(plus_dm, period)
+    smoothed_minus_dm = wilder_smooth_pinescript(minus_dm, period)
+    
+    # DI+ and DI- (multiply by 100)
+    # DIPlus = SmoothedDirectionalMovementPlus / SmoothedTrueRange * 100
+    di_plus = 100 * (smoothed_plus_dm / pd.Series(smoothed_tr).replace(0, np.nan))
+    di_minus = 100 * (smoothed_minus_dm / pd.Series(smoothed_tr).replace(0, np.nan))
     
     # DX
-    dx = pd.Series(100 * abs(plus_di - minus_di) / (plus_di + minus_di), index=df.index)
+    # DX = math.abs(DIPlus - DIMinus) / (DIPlus + DIMinus) * 100
+    di_sum = pd.Series(di_plus + di_minus).replace(0, np.nan)
+    dx = pd.Series(100 * np.abs(di_plus - di_minus) / di_sum, index=df.index)
     
-    # ADX - PineScript uses SMA, not Wilder's smoothing!
     # ADX = ta.sma(DX, adxLen)
-    adx = dx.rolling(window=14).mean()
+    adx = pd.Series(dx).rolling(window=period).mean()
     
     df['adx'] = adx
-    df['di_plus'] = plus_di
-    df['di_minus'] = minus_di
+    df['di_plus'] = di_plus
+    df['di_minus'] = di_minus
     
     # Result
     result = df[['time', 'open', 'high', 'low', 'close', 'volume', 
