@@ -238,16 +238,18 @@ def calculate_indicators_with_extras(
     # SmoothedValue = nz(SmoothedValue[1]) - (nz(SmoothedValue[1]) / length) + CurrentValue
     def wilder_smooth_pinescript(series: pd.Series, period: int) -> pd.Series:
         """PineScript's Wilder smoothing (RMA) - 1:1 implementation."""
-        result = pd.Series(0.0, index=series.index)
+        result = pd.Series(np.nan, index=series.index)
         
         # First value is the sum of first 'period' values (PineScript: nz(prev, 0) then accumulate)
         first_valid = series.iloc[:period].sum()
-        result.iloc[period-1] = first_valid
+        result.iloc[period - 1] = first_valid
         
-        # Apply Wilder's formula: prev - (prev / period) + current
+        # Apply Wilder's formula: (prev * (period - 1) + current) / period
         for i in range(period, len(series)):
-            prev_value = result.iloc[i-1] if not pd.isna(result.iloc[i-1]) else 0
-            result.iloc[i] = prev_value - (prev_value / period) + series.iloc[i]
+            prev_value = result.iloc[i - 1]
+            if pd.isna(prev_value):
+                prev_value = series.iloc[:i].mean() * period  # Fallback
+            result.iloc[i] = (prev_value * (period - 1) + series.iloc[i]) / period
         
         return result
     
@@ -268,8 +270,9 @@ def calculate_indicators_with_extras(
     di_sum = pd.Series(di_plus + di_minus).replace(0, np.nan)
     dx = pd.Series(100 * np.abs(di_plus - di_minus) / di_sum, index=df.index)
     
-    # ADX = ta.sma(DX, adxLen)
-    adx = pd.Series(dx).rolling(window=period).mean()
+    # ADX = Wilder's smoothing (RMA) of DX - NOT SMA!
+    # PineScript: ta.rma(dx, adxLen) or ta.wma with specific formula
+    adx = wilder_smooth_pinescript(dx.fillna(0), period)
     
     df['adx'] = adx
     df['di_plus'] = di_plus
@@ -329,11 +332,21 @@ def calculate_adx(
     
     # Smoothed values using Wilder's smoothing
     def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
-        """Apply Wilder's smoothing technique."""
-        result = series.copy()
-        result.iloc[period] = series.iloc[:period+1].sum()
-        for i in range(period + 1, len(series)):
-            result.iloc[i] = result.iloc[i-1] - (result.iloc[i-1] / period) + series.iloc[i]
+        """Apply Wilder's smoothing technique (RMA) - 1:1 PineScript implementation."""
+        result = pd.Series(np.nan, index=series.index)
+        
+        # First valid value is the sum of first 'period' values
+        # In PineScript: SmoothedValue[period-1] = sum(series[0:period])
+        first_sum = series.iloc[:period].sum()
+        result.iloc[period - 1] = first_sum
+        
+        # Apply Wilder's formula: (prev * (period - 1) + current) / period
+        for i in range(period, len(series)):
+            prev_value = result.iloc[i - 1]
+            if pd.isna(prev_value):
+                prev_value = series.iloc[:i].mean() * period  # Fallback
+            result.iloc[i] = (prev_value * (period - 1) + series.iloc[i]) / period
+        
         return result
     
     # Smooth TR, +DM, -DM

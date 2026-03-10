@@ -66,6 +66,21 @@ Plan 02-04 complete: Indicator settings UI, setup detection table, and backgroun
 Last session: 2026-03-10
 Stopped at: Completed Plan 02-04 - Indicator settings UI and setup detection
 
+## Recent Updates (2026-03-10)
+
+### Bug Fix: ADX/DI Wilder Smoothing
+- **Issue:** ADX values were in 100-1300+ range (should be 0-100)
+- **Root Cause:** Wrong Wilder's smoothing formula in indicator calculations
+- **Fix:** Changed formula from `prev - (prev/period) + current` to `(prev * (period-1) + current) / period`
+- **Files Modified:** `backend/app/services/indicators.py`
+- **Test Scripts Created:** `tests/test_adx.py`, `tests/test_adx_realtime.py`
+
+### Validation Results
+- Random data test: ADX 22.88-55.97 (PASS)
+- Real BTC/USDT: ADX 69.22-96.32 (PASS) 
+- Real ETH/USDT: ADX 18.41-33.06 (PASS)
+- All validation checks: PASS
+
 ## Next Steps
 
 1. Phase 1 Foundation complete
