@@ -64,23 +64,29 @@ def calculate_cci(
     """
     Commodity Channel Index (CCI) - 1:1 PineScript translation.
     
-    Uses hlc3 as source, SMA, and standard deviation.
-    CCI = (hlc3 - SMA(hlc3)) / (0.015 * STDEV(hlc3))
+    PineScript formula:
+    cciMA = ta.sma(hlc3, cciLength)
+    cci = (hlc3 - cciMA) / (0.015 * ta.dev(hlc3, cciLength))
+    
+    NOTE: ta.dev is MEAN DEVIATION (average absolute deviation), NOT standard deviation!
     """
-    # hlc3 = typical price
+    # hlc3 = typical price (matches PineScript cciSrc)
     hlc3 = (high + low + close) / 3
     
     # SMA of hlc3
     cci_ma = hlc3.rolling(window=period).mean()
     
-    # Standard deviation (PineScript ta.dev)
-    std_dev = hlc3.rolling(window=period).std()
+    # Mean deviation (NOT standard deviation!)
+    # PineScript ta.dev calculates: mean(|x - mean(x)|)
+    mean_dev = hlc3.rolling(window=period).apply(
+        lambda x: np.mean(np.abs(x - np.mean(x)))
+    )
     
-    # Replace zero std_dev with NaN to avoid division by zero
-    std_dev = std_dev.replace(0, np.nan)
+    # Replace zero mean_dev with NaN to avoid division by zero
+    mean_dev = mean_dev.replace(0, np.nan)
     
-    # CCI = (src - sma) / (0.015 * stdev)
-    cci = (hlc3 - cci_ma) / (0.015 * std_dev)
+    # CCI = (src - sma) / (0.015 * mean_deviation)
+    cci = (hlc3 - cci_ma) / (0.015 * mean_dev)
     
     return cci
 
@@ -120,10 +126,13 @@ def calculate_indicators_with_extras(
     hlc3 = (df['high'] + df['low'] + df['close']) / 3
     
     # === CCI ===
-    # CCI = (hlc3 - SMA(hlc3)) / (0.015 * STDEV(hlc3))
+    # PineScript: cci = (hlc3 - ta.sma(hlc3, cciLength)) / (0.015 * ta.dev(hlc3, cciLength))
+    # NOTE: ta.dev is MEAN DEVIATION, not standard deviation!
     cci_ma = hlc3.rolling(window=cci_period).mean()
-    cci_std = hlc3.rolling(window=cci_period).std().replace(0, np.nan)
-    df['cci'] = (hlc3 - cci_ma) / (0.015 * cci_std)
+    cci_mean_dev = hlc3.rolling(window=cci_period).apply(
+        lambda x: np.mean(np.abs(x - np.mean(x)))
+    ).replace(0, np.nan)
+    df['cci'] = (hlc3 - cci_ma) / (0.015 * cci_mean_dev)
     
     # === MFI ===
     # MFI: raw = ta.mfi(hlc3, period), scaled = (raw - 50) * 2
