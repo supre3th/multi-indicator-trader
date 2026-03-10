@@ -1,14 +1,22 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, ColorType, CrosshairMode, CandlestickSeries } from 'lightweight-charts';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, ColorType, CrosshairMode, CandlestickSeries, LineSeries } from 'lightweight-charts';
 import { useChartStore } from '@/stores/chartStore';
-import { fetchKlines } from '@/lib/api';
+import { useIndicatorStore, IndicatorData } from '@/stores/indicatorStore';
+import { fetchKlines, fetchIndicators } from '@/lib/api';
 
 export function Chart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+
+  // Indicator series refs
+  const [cciSeries, setCciSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [mfiSeries, setMfiSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [adxSeries, setAdxSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [diPlusSeries, setDiPlusSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [diMinusSeries, setDiMinusSeries] = useState<ISeriesApi<"Line"> | null>(null);
 
   const {
     symbol,
@@ -20,15 +28,13 @@ export function Chart() {
     setIsLoading,
   } = useChartStore();
 
+  const indicatorStore = useIndicatorStore();
+
   // Initialize chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: theme === 'dark' ? '#000' : '#fff' },
-        textColor: theme === 'dark' ? '#d1d5db' : '#374151',
-      },
       grid: {
         vertLines: { color: theme === 'dark' ? '#1f2937' : '#e5e7eb' },
         horzLines: { color: theme === 'dark' ? '#1f2937' : '#e5e7eb' },
@@ -44,8 +50,14 @@ export function Chart() {
       rightPriceScale: {
         borderColor: theme === 'dark' ? '#374151' : '#d1d5db',
       },
+      layout: {
+        background: { type: ColorType.Solid, color: theme === 'dark' ? '#000' : '#fff' },
+        textColor: theme === 'dark' ? '#d1d5db' : '#374151',
+        panes: { separatorColor: theme === 'dark' ? '#4b5563' : '#d1d5db' },
+      },
     });
 
+    // Main candlestick chart on pane 0
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#22c55e',
       downColor: '#ef4444',
@@ -55,8 +67,48 @@ export function Chart() {
       wickDownColor: '#ef4444',
     });
 
+    // CCI+MFI pane (pane 1) - Colors LOCKED from CONTEXT.md
+    const cci = chart.addSeries(LineSeries, {
+      color: '#2962FF',  // CCI blue - LOCKED
+      lineWidth: 2,
+      title: 'CCI',
+    }, 1);
+    const mfi = chart.addSeries(LineSeries, {
+      color: '#FDE832',  // MFI yellow - LOCKED
+      lineWidth: 1,
+      title: 'MFI',
+    }, 1);
+
+    // ADX+DI pane (pane 2) - Colors LOCKED from CONTEXT.md
+    const adx = chart.addSeries(LineSeries, {
+      color: '#000080',  // ADX navy - LOCKED
+      lineWidth: 2,
+      title: 'ADX',
+    }, 2);
+    const diPlus = chart.addSeries(LineSeries, {
+      color: '#22c55e',  // DI+ green - LOCKED
+      lineWidth: 1,
+      title: 'DI+',
+    }, 2);
+    const diMinus = chart.addSeries(LineSeries, {
+      color: '#ef4444',  // DI- red - LOCKED
+      lineWidth: 1,
+      title: 'DI-',
+    }, 2);
+
+    // Set pane heights
+    chart.panes()[0].setHeight(400);
+    chart.panes()[1].setHeight(150);
+    chart.panes()[2].setHeight(150);
+
+    // Store refs
     chartRef.current = chart;
     candlestickSeriesRef.current = candlestickSeries;
+    setCciSeries(cci);
+    setMfiSeries(mfi);
+    setAdxSeries(adx);
+    setDiPlusSeries(diPlus);
+    setDiMinusSeries(diMinus);
 
     // Handle resize
     const handleResize = () => {
@@ -76,6 +128,11 @@ export function Chart() {
       chart.remove();
       chartRef.current = null;
       candlestickSeriesRef.current = null;
+      setCciSeries(null);
+      setMfiSeries(null);
+      setAdxSeries(null);
+      setDiPlusSeries(null);
+      setDiMinusSeries(null);
     };
   }, []); // Only run once on mount
 
@@ -105,6 +162,7 @@ export function Chart() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Fetch candlestick data
       const data = await fetchKlines(symbol, timeframe, 200);
       setCandles(data);
 
@@ -117,16 +175,54 @@ export function Chart() {
           close: candle.close,
         }));
         candlestickSeriesRef.current.setData(chartData);
-
-        // Fit content
-        chartRef.current?.timeScale().fitContent();
       }
+
+      // Fetch indicator data
+      try {
+        const indicatorData = await fetchIndicators(symbol, timeframe, {
+          mfiPeriod: indicatorStore.mfiPeriod,
+          cciPeriod: indicatorStore.cciPeriod,
+          adxPeriod: indicatorStore.adxPeriod,
+        });
+
+        // Update CCI+MFI pane (pane 1)
+        const cciData = indicatorData.data
+          .filter(d => d.cci !== undefined)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.cci }));
+        const mfiData = indicatorData.data
+          .filter(d => d.mfi !== undefined)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.mfi }));
+        cciSeries?.setData(cciData);
+        mfiSeries?.setData(mfiData);
+
+        // Update ADX+DI pane (pane 2)
+        const adxData = indicatorData.data
+          .filter(d => d.adx !== undefined)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.adx }));
+        const diPlusData = indicatorData.data
+          .filter(d => d.di_plus !== undefined)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.di_plus }));
+        const diMinusData = indicatorData.data
+          .filter(d => d.di_minus !== undefined)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.di_minus }));
+        adxSeries?.setData(adxData);
+        diPlusSeries?.setData(diPlusData);
+        diMinusSeries?.setData(diMinusData);
+
+        // Store indicator data
+        indicatorStore.setData(indicatorData.data);
+      } catch (indError) {
+        console.warn('Failed to fetch indicators:', indError);
+      }
+
+      // Fit content
+      chartRef.current?.timeScale().fitContent();
     } catch (error) {
       console.error('Failed to fetch klines:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading]);
+  }, [symbol, timeframe, setCandles, setIsLoading, indicatorStore, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries]);
 
   useEffect(() => {
     loadData();
