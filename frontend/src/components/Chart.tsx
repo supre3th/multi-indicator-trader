@@ -170,7 +170,7 @@ export function Chart() {
 
     // ADX+DI pane (pane 2) - Colors LOCKED from CONTEXT.md
     const adx = chart.addSeries(LineSeries, {
-      color: '#000080',  // ADX navy - LOCKED
+      color: '#ffffff',  // ADX white
       lineWidth: 2,
       title: 'ADX',
     }, 2);
