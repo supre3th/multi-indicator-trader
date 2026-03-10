@@ -44,7 +44,7 @@
 - [ ] Price Channel (dynamic pivot-based with MTF)
 
 **Plans:**
-- [ ] 02-01-PLAN.md — Backend indicator calculations (MFI, CCI, ADX, DI)
+- [x] 02-01-PLAN.md — Backend indicator calculations (MFI, CCI, ADX, DI)
 - [ ] 02-02-PLAN.md — Frontend indicator panes (CCI+MFI, ADX+DI panes)
 - [ ] 02-03-PLAN.md — Price Channel + MTF support
 - [ ] 02-04-PLAN.md — Settings UI + Setup Table overlay
@@ -83,4 +83,4 @@
 
 ---
 
-*Last updated: 2026-03-03*
+*Last updated: 2026-03-10*
