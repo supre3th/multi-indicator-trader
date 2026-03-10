@@ -2,9 +2,9 @@
 API endpoints for indicator calculations.
 """
 from fastapi import APIRouter, Query
-from typing import Any, Dict, List
-from app.services.indicators import calculate_indicators
-from app.models.indicators import IndicatorResponse, IndicatorValue
+from typing import Any, Dict, List, Optional
+from app.services.indicators import calculate_indicators, calculate_mtf_channel
+from app.models.indicators import IndicatorResponse, IndicatorValue, MTFChannelData
 
 router = APIRouter()
 
@@ -29,6 +29,16 @@ def _dict_to_indicator_value(d: Dict[str, Any]) -> IndicatorValue:
     )
 
 
+def _dict_to_mtf_channel(d: Dict[str, Any]) -> MTFChannelData:
+    """Convert a dictionary to MTFChannelData, handling None values."""
+    return MTFChannelData(
+        time=int(d['time']),
+        channel_upper=float(d['channel_upper']) if d.get('channel_upper') is not None else None,
+        channel_middle=float(d['channel_middle']) if d.get('channel_middle') is not None else None,
+        channel_lower=float(d['channel_lower']) if d.get('channel_lower') is not None else None,
+    )
+
+
 @router.get("/indicators", response_model=IndicatorResponse)
 async def get_indicators(
     symbol: str = Query("BTC/USDT", description="Trading symbol"),
@@ -38,6 +48,7 @@ async def get_indicators(
     adx_period: int = Query(14, description="ADX period"),
     channel_period: int = Query(20, description="Channel period"),
     channel_type: str = Query("pivot", description="Channel type: pivot, donchian, linear_regression"),
+    higher_tf: Optional[str] = Query(None, description="Higher timeframe for MTF channel (4h, 1d, etc.)"),
     limit: int = Query(200, description="Number of candles"),
 ) -> IndicatorResponse:
     """Calculate MFI, CCI, ADX, DI, and Price Channel indicators."""
@@ -63,9 +74,20 @@ async def get_indicators(
     # Convert to IndicatorValue objects for proper Pydantic validation
     indicator_data = [_dict_to_indicator_value(d) for d in data]
     
+    # Calculate MTF channel if higher_tf is specified
+    mtf_channel = None
+    if higher_tf:
+        mtf_data = await calculate_mtf_channel(
+            symbol, interval, higher_tf,
+            period=channel_period,
+            channel_type=channel_type
+        )
+        mtf_channel = [_dict_to_mtf_channel(d) for d in mtf_data]
+    
     return IndicatorResponse(
         symbol=symbol,
         interval=interval,
         data=indicator_data,
-        count=len(indicator_data)
+        count=len(indicator_data),
+        mtf_channel=mtf_channel,
     )

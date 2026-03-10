@@ -5,6 +5,7 @@ import { createChart, IChartApi, ISeriesApi, CandlestickData, ColorType, Crossha
 import { useChartStore } from '@/stores/chartStore';
 import { useIndicatorStore, IndicatorData } from '@/stores/indicatorStore';
 import { fetchKlines, fetchIndicators } from '@/lib/api';
+import { PriceChannel } from './chart/PriceChannel';
 
 export function Chart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -29,6 +30,20 @@ export function Chart() {
   } = useChartStore();
 
   const indicatorStore = useIndicatorStore();
+
+  // MTF channel state
+  const [higherTfChannel, setHigherTfChannel] = useState<IndicatorData[]>([]);
+  const [selectedHigherTf, setSelectedHigherTf] = useState<string>('');
+
+  // MTF timeframe mapping
+  const higherTfOptions: Record<string, string[]> = {
+    '1m': ['5m', '15m'],
+    '5m': ['15m', '1h'],
+    '15m': ['1h', '4h'],
+    '1h': ['4h', '1d'],
+    '4h': ['1d', '1w'],
+    '1d': ['1w', '1M'],
+  };
 
   // Initialize chart
   useEffect(() => {
@@ -183,6 +198,9 @@ export function Chart() {
           mfiPeriod: indicatorStore.mfiPeriod,
           cciPeriod: indicatorStore.cciPeriod,
           adxPeriod: indicatorStore.adxPeriod,
+          channelPeriod: indicatorStore.channelPeriod,
+          channelType: indicatorStore.channelType,
+          higherTf: indicatorStore.higherTf || undefined,
         });
 
         // Update CCI+MFI pane (pane 1)
@@ -211,6 +229,32 @@ export function Chart() {
 
         // Store indicator data
         indicatorStore.setData(indicatorData.data);
+
+        // Fetch MTF channel if showChannel is enabled
+        if (indicatorStore.showChannel && indicatorStore.higherTf) {
+          const higherOptions = higherTfOptions[timeframe];
+          if (higherOptions && higherOptions.includes(indicatorStore.higherTf)) {
+            const mtfResponse = await fetchIndicators(symbol, indicatorStore.higherTf, {
+              channelPeriod: indicatorStore.channelPeriod,
+              channelType: indicatorStore.channelType,
+              limit: 100,
+            });
+            // Transform MTF data to IndicatorData format
+            const mtfData: IndicatorData[] = mtfResponse.data.map(d => ({
+              time: d.time,
+              open: d.open,
+              high: d.high,
+              low: d.low,
+              close: d.close,
+              volume: d.volume,
+              channel_upper: d.channel_upper,
+              channel_middle: d.channel_middle,
+              channel_lower: d.channel_lower,
+            }));
+            setHigherTfChannel(mtfData);
+            setSelectedHigherTf(indicatorStore.higherTf);
+          }
+        }
       } catch (indError) {
         console.warn('Failed to fetch indicators:', indError);
       }
@@ -222,7 +266,7 @@ export function Chart() {
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading, indicatorStore, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries]);
+  }, [symbol, timeframe, setCandles, setIsLoading, indicatorStore, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries, higherTfOptions]);
 
   useEffect(() => {
     loadData();
@@ -238,6 +282,14 @@ export function Chart() {
         </div>
       )}
       <div ref={chartContainerRef} className="w-full h-full" />
+      <PriceChannel
+        chart={chartRef.current}
+        data={indicatorStore.data}
+        higherTfData={higherTfChannel}
+        channelType={indicatorStore.channelType}
+        show={indicatorStore.showChannel}
+        higherTf={selectedHigherTf}
+      />
     </div>
   );
 }

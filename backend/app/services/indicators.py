@@ -320,3 +320,61 @@ def calculate_indicators(
                 row[key] = float(value) if isinstance(value, np.floating) else int(value)
     
     return result
+
+
+async def calculate_mtf_channel(
+    symbol: str,
+    interval: str,
+    higher_tf: str,
+    period: int = 20,
+    channel_type: str = "pivot"
+) -> List[Dict[str, Any]]:
+    """
+    Calculate channel from higher timeframe data.
+    
+    Args:
+        symbol: Trading symbol (e.g., BTC/USDT)
+        interval: Current timeframe
+        higher_tf: Higher timeframe (e.g., 4h, 1d, 1w)
+        period: Channel lookback period
+        channel_type: Channel type - "pivot", "donchian", or "linear_regression"
+    
+    Returns:
+        List of dictionaries with time and channel values
+    """
+    from app.services.binance import fetch_klines
+    
+    # Fetch higher TF data
+    higher_klines = await fetch_klines(symbol, higher_tf, limit=100)
+    df = pd.DataFrame(higher_klines, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+    
+    for col in ['open', 'high', 'low', 'close', 'volume']:
+        df[col] = pd.to_numeric(df[col])
+    
+    # Calculate channel based on type
+    if channel_type == 'pivot':
+        df['channel_upper'] = df['high'].rolling(period).max().shift(1)
+        df['channel_lower'] = df['low'].rolling(period).min().shift(1)
+        df['channel_middle'] = None
+    elif channel_type == 'donchian':
+        df['channel_upper'] = df['high'].rolling(period).max()
+        df['channel_lower'] = df['low'].rolling(period).min()
+        df['channel_middle'] = None
+    elif channel_type == 'linear_regression':
+        df['channel_middle'] = df['close'].rolling(period).mean()
+        std = df['close'].rolling(period).std()
+        df['channel_upper'] = df['channel_middle'] + (std * 2)
+        df['channel_lower'] = df['channel_middle'] - (std * 2)
+    
+    # Select only required columns
+    result = df[['time', 'channel_upper', 'channel_middle', 'channel_lower']].to_dict(orient='records')
+    
+    # Convert numpy types
+    for row in result:
+        for key, value in row.items():
+            if pd.isna(value) or value is None:
+                row[key] = None
+            elif isinstance(value, (np.integer, np.floating)):
+                row[key] = float(value) if isinstance(value, np.floating) else int(value)
+    
+    return result

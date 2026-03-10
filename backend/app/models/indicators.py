@@ -17,6 +17,14 @@ class IndicatorRequest(BaseModel):
     limit: int = 200
 
 
+class MTFChannelData(BaseModel):
+    """MTF channel data from higher timeframe."""
+    time: int
+    channel_upper: Optional[float] = None
+    channel_middle: Optional[float] = None
+    channel_lower: Optional[float] = None
+
+
 class IndicatorValue(BaseModel):
     """Individual candle with calculated indicator values."""
     # Time
@@ -47,3 +55,4 @@ class IndicatorResponse(BaseModel):
     interval: str
     data: List[IndicatorValue]
     count: int
+    mtf_channel: Optional[List[MTFChannelData]] = None
