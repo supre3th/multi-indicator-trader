@@ -178,6 +178,9 @@ export function Chart() {
     });
   }, [theme]);
 
+  // Extract indicator settings to avoid recreating loadData on each render
+  const { mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setData: setIndicatorData } = indicatorStore;
+
   // Fetch data when symbol or timeframe changes
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -200,12 +203,12 @@ export function Chart() {
       // Fetch indicator data
       try {
         const indicatorData = await fetchIndicators(symbol, timeframe, {
-          mfiPeriod: indicatorStore.mfiPeriod,
-          cciPeriod: indicatorStore.cciPeriod,
-          adxPeriod: indicatorStore.adxPeriod,
-          channelPeriod: indicatorStore.channelPeriod,
-          channelType: indicatorStore.channelType,
-          higherTf: indicatorStore.higherTf || undefined,
+          mfiPeriod,
+          cciPeriod,
+          adxPeriod,
+          channelPeriod,
+          channelType,
+          higherTf: higherTf || undefined,
         });
 
         // Update CCI+MFI pane (pane 1)
@@ -233,15 +236,15 @@ export function Chart() {
         diMinusSeries?.setData(diMinusData);
 
         // Store indicator data
-        indicatorStore.setData(indicatorData.data);
+        setIndicatorData(indicatorData.data);
 
         // Fetch MTF channel if showChannel is enabled
-        if (indicatorStore.showChannel && indicatorStore.higherTf) {
+        if (showChannel && higherTf) {
           const higherOptions = higherTfOptions[timeframe];
-          if (higherOptions && higherOptions.includes(indicatorStore.higherTf)) {
-            const mtfResponse = await fetchIndicators(symbol, indicatorStore.higherTf, {
-              channelPeriod: indicatorStore.channelPeriod,
-              channelType: indicatorStore.channelType,
+          if (higherOptions && higherOptions.includes(higherTf)) {
+            const mtfResponse = await fetchIndicators(symbol, higherTf, {
+              channelPeriod,
+              channelType,
               limit: 100,
             });
             // Transform MTF data to IndicatorData format
@@ -257,7 +260,7 @@ export function Chart() {
               channel_lower: d.channel_lower,
             }));
             setHigherTfChannel(mtfData);
-            setSelectedHigherTf(indicatorStore.higherTf);
+            setSelectedHigherTf(higherTf);
           }
         }
       } catch (indError) {
@@ -271,18 +274,21 @@ export function Chart() {
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading, indicatorStore, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries, higherTfOptions]);
+  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries, higherTfOptions]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  // Extract indicator data
+  const indicatorData = indicatorStore.data;
+
   // Background tint based on setup
   useEffect(() => {
     if (!chartRef.current) return;
     
-    const latestData = indicatorStore.data.length > 0 
-      ? indicatorStore.data[indicatorStore.data.length - 1] 
+    const latestData = indicatorData.length > 0 
+      ? indicatorData[indicatorData.length - 1] 
       : null;
     
     if (!latestData || latestData.adx == null) {
@@ -320,11 +326,11 @@ export function Chart() {
         background: { type: ColorType.Solid, color: tintColor || baseColor },
       },
     });
-  }, [indicatorStore.data, theme]);
+  }, [indicatorData, theme]);
 
   // Get latest data for setup table
-  const latestData = indicatorStore.data.length > 0 
-    ? indicatorStore.data[indicatorStore.data.length - 1] 
+  const latestData = indicatorData.length > 0 
+    ? indicatorData[indicatorData.length - 1] 
     : null;
 
   return (
