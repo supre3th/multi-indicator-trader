@@ -34,6 +34,7 @@ export function Chart() {
   // Indicator series refs
   const [cciSeries, setCciSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [mfiSeries, setMfiSeries] = useState<ISeriesApi<"Line"> | null>(null);
+  const [cciMaSeries, setCciMaSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [adxSeries, setAdxSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [diPlusSeries, setDiPlusSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [diMinusSeries, setDiMinusSeries] = useState<ISeriesApi<"Line"> | null>(null);
@@ -111,6 +112,11 @@ export function Chart() {
       lineWidth: 1,
       title: 'MFI',
     }, 1);
+    const cciMa = chart.addSeries(LineSeries, {
+      color: '#A44A88',  // CCI MA pink - matches PineScript
+      lineWidth: 1,
+      title: 'CCI MA',
+    }, 1);
 
     // ADX+DI pane (pane 2) - Colors LOCKED from CONTEXT.md
     const adx = chart.addSeries(LineSeries, {
@@ -139,6 +145,7 @@ export function Chart() {
     candlestickSeriesRef.current = candlestickSeries;
     setCciSeries(cci);
     setMfiSeries(mfi);
+    setCciMaSeries(cciMa);
     setAdxSeries(adx);
     setDiPlusSeries(diPlus);
     setDiMinusSeries(diMinus);
@@ -234,8 +241,12 @@ export function Chart() {
         const mfiData = indicatorData.data
           .filter(d => d.mfi !== undefined)
           .map(d => ({ time: (d.time / 1000) as any, value: d.mfi }));
+        const cciMaData = indicatorData.data
+          .filter(d => d.cci_ma !== undefined && d.cci_ma !== null)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.cci_ma }));
         cciSeries?.setData(cciData);
         mfiSeries?.setData(mfiData);
+        cciMaSeries?.setData(cciMaData);
 
         // Update ADX+DI pane (pane 2)
         const adxData = indicatorData.data
@@ -290,7 +301,7 @@ export function Chart() {
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, cciSeries, mfiSeries, adxSeries, diPlusSeries, diMinusSeries]);
+  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, cciSeries, mfiSeries, cciMaSeries, adxSeries, diPlusSeries, diMinusSeries]);
 
   useEffect(() => {
     loadData();
