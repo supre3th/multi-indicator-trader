@@ -222,10 +222,11 @@ def calculate_indicators_with_extras(
     minus_di = 100 * (smoothed_minus_dm / smoothed_tr)
     
     # DX
-    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+    dx = pd.Series(100 * abs(plus_di - minus_di) / (plus_di + minus_di), index=df.index)
     
-    # ADX (smoothed DX)
-    adx = wilder_smooth(dx, 14)
+    # ADX - PineScript uses SMA, not Wilder's smoothing!
+    # ADX = ta.sma(DX, adxLen)
+    adx = dx.rolling(window=14).mean()
     
     df['adx'] = adx
     df['di_plus'] = plus_di
