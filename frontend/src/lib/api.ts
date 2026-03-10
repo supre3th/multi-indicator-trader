@@ -5,6 +5,9 @@ import { IndicatorData } from '@/stores/indicatorStore';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+const log = (...args: unknown[]) => console.log('[API]', ...args);
+const logError = (...args: unknown[]) => console.error('[API ERROR]', ...args);
+
 export interface CandleData {
   time: number;
   open: number;
@@ -53,14 +56,20 @@ export async function fetchKlines(
     limit: limit.toString(),
   });
 
-  const response = await fetch(`${API_BASE_URL}/api/klines?${params}`);
+  const url = `${API_BASE_URL}/api/klines?${params}`;
+  log('Fetching klines:', url);
+  
+  const response = await fetch(url);
+  log('Response status:', response.status);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    logError('Fetch failed:', error);
     throw new Error(error.detail || `Failed to fetch klines: ${response.statusText}`);
   }
 
   const data: KlinesResponse = await response.json();
+  log('Got klines, count:', data.count);
   return data.data;
 }
 

@@ -6,8 +6,12 @@ import { TimeframeSelector } from '@/components/TimeframeSelector';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useChartStore } from '@/stores/chartStore';
 
+const log = (...args: unknown[]) => console.log('[Page]', ...args);
+
 export default function Home() {
+  log('Home page rendering');
   const { symbol, timeframe } = useChartStore();
+  log('Store values - symbol:', symbol, 'timeframe:', timeframe);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

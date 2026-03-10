@@ -8,8 +8,15 @@ import { fetchKlines, fetchIndicators } from '@/lib/api';
 import { PriceChannel } from './chart/PriceChannel';
 import { SetupTable, detectSetup } from './chart/SetupTable';
 import { IndicatorSettings } from './ui/IndicatorSettings';
+import { debug } from '@/lib/debug';
+
+// Simple console.log wrapper
+const log = (...args: unknown[]) => console.log('[Chart]', ...args);
+const logError = (...args: unknown[]) => console.error('[Chart ERROR]', ...args);
 
 export function Chart() {
+  log('Chart component rendering');
+  
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -52,8 +59,14 @@ export function Chart() {
 
   // Initialize chart
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    log('Initializing chart, container:', chartContainerRef.current ? 'exists' : 'NULL');
+    
+    if (!chartContainerRef.current) {
+      logError('No chart container ref!');
+      return;
+    }
 
+    log('Creating chart with theme:', theme);
     const chart = createChart(chartContainerRef.current, {
       grid: {
         vertLines: { color: theme === 'dark' ? '#1f2937' : '#e5e7eb' },
@@ -183,10 +196,13 @@ export function Chart() {
 
   // Fetch data when symbol or timeframe changes
   const loadData = useCallback(async () => {
+    log('loadData called, symbol:', symbol, 'timeframe:', timeframe);
     setIsLoading(true);
     try {
       // Fetch candlestick data
+      log('Fetching klines from API...');
       const data = await fetchKlines(symbol, timeframe, 200);
+      log('Got klines:', data.length, 'candles');
       setCandles(data);
 
       if (candlestickSeriesRef.current) {
