@@ -32,7 +32,6 @@ export function Chart() {
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
   // Indicator series refs
-  const [cciSeries, setCciSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [mfiSeries, setMfiSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [cciMaSeries, setCciMaSeries] = useState<ISeriesApi<"Line"> | null>(null);
   const [adxSeries, setAdxSeries] = useState<ISeriesApi<"Line"> | null>(null);
@@ -101,12 +100,7 @@ export function Chart() {
       wickDownColor: '#ef4444',
     });
 
-    // CCI+MFI pane (pane 1) - Colors LOCKED from CONTEXT.md
-    const cci = chart.addSeries(LineSeries, {
-      color: '#2962FF',  // CCI blue - LOCKED
-      lineWidth: 2,
-      title: 'CCI',
-    }, 1);
+    // CCI+MFI pane (pane 1) - MFI + CCI MA only (CCI removed per user request)
     const mfi = chart.addSeries(LineSeries, {
       color: '#FDE832',  // MFI yellow - LOCKED
       lineWidth: 1,
@@ -143,7 +137,6 @@ export function Chart() {
     // Store refs
     chartRef.current = chart;
     candlestickSeriesRef.current = candlestickSeries;
-    setCciSeries(cci);
     setMfiSeries(mfi);
     setCciMaSeries(cciMa);
     setAdxSeries(adx);
@@ -168,7 +161,6 @@ export function Chart() {
       chart.remove();
       chartRef.current = null;
       candlestickSeriesRef.current = null;
-      setCciSeries(null);
       setMfiSeries(null);
       setAdxSeries(null);
       setDiPlusSeries(null);
@@ -234,17 +226,13 @@ export function Chart() {
           higherTf: higherTf || undefined,
         });
 
-        // Update CCI+MFI pane (pane 1)
-        const cciData = indicatorData.data
-          .filter(d => d.cci !== undefined)
-          .map(d => ({ time: (d.time / 1000) as any, value: d.cci }));
+        // Update MFI + CCI MA pane (pane 1) - CCI removed per user request
         const mfiData = indicatorData.data
           .filter(d => d.mfi !== undefined)
           .map(d => ({ time: (d.time / 1000) as any, value: d.mfi }));
         const cciMaData = indicatorData.data
           .filter(d => d.cci_ma !== undefined && d.cci_ma !== null)
           .map(d => ({ time: (d.time / 1000) as any, value: d.cci_ma }));
-        cciSeries?.setData(cciData);
         mfiSeries?.setData(mfiData);
         cciMaSeries?.setData(cciMaData);
 
@@ -301,7 +289,7 @@ export function Chart() {
     } finally {
       setIsLoading(false);
     }
-  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, cciSeries, mfiSeries, cciMaSeries, adxSeries, diPlusSeries, diMinusSeries]);
+  }, [symbol, timeframe, setCandles, setIsLoading, mfiPeriod, cciPeriod, adxPeriod, channelPeriod, channelType, higherTf, showChannel, setIndicatorData, mfiSeries, cciMaSeries, adxSeries, diPlusSeries, diMinusSeries]);
 
   useEffect(() => {
     loadData();
