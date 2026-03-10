@@ -274,13 +274,20 @@ export function Chart() {
       setCandles(data);
 
       if (candlestickSeriesRef.current) {
-        const chartData: CandlestickData[] = data.map((candle) => ({
-          time: (candle.time / 1000) as any, // Convert ms to seconds for lightweight-charts
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-        }));
+        const chartData: CandlestickData[] = data
+          .filter(candle => 
+            candle.open != null && 
+            candle.high != null && 
+            candle.low != null && 
+            candle.close != null
+          )
+          .map((candle) => ({
+            time: (candle.time / 1000) as any, // Convert ms to seconds for lightweight-charts
+            open: candle.open!,
+            high: candle.high!,
+            low: candle.low!,
+            close: candle.close!,
+          }));
         candlestickSeriesRef.current.setData(chartData);
       }
 
@@ -297,11 +304,11 @@ export function Chart() {
 
         // Update MFI + CCI MA pane (pane 1) - CCI removed per user request
         const mfiData = indicatorData.data
-          .filter(d => d.mfi !== undefined)
-          .map(d => ({ time: (d.time / 1000) as any, value: d.mfi }));
+          .filter(d => d.mfi !== undefined && d.mfi !== null)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.mfi! }));
         const cciMaData = indicatorData.data
           .filter(d => d.cci_ma !== undefined && d.cci_ma !== null)
-          .map(d => ({ time: (d.time / 1000) as any, value: d.cci_ma }));
+          .map(d => ({ time: (d.time / 1000) as any, value: d.cci_ma! }));
         mfiSeries?.setData(mfiData);
         cciMaSeries?.setData(cciMaData);
         
@@ -318,14 +325,14 @@ export function Chart() {
 
         // Update ADX+DI pane (pane 2)
         const adxData = indicatorData.data
-          .filter(d => d.adx !== undefined)
-          .map(d => ({ time: (d.time / 1000) as any, value: d.adx }));
+          .filter(d => d.adx !== undefined && d.adx !== null)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.adx! }));
         const diPlusData = indicatorData.data
-          .filter(d => d.di_plus !== undefined)
-          .map(d => ({ time: (d.time / 1000) as any, value: d.di_plus }));
+          .filter(d => d.di_plus !== undefined && d.di_plus !== null)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.di_plus! }));
         const diMinusData = indicatorData.data
-          .filter(d => d.di_minus !== undefined)
-          .map(d => ({ time: (d.time / 1000) as any, value: d.di_minus }));
+          .filter(d => d.di_minus !== undefined && d.di_minus !== null)
+          .map(d => ({ time: (d.time / 1000) as any, value: d.di_minus! }));
         adxSeries?.setData(adxData);
         diPlusSeries?.setData(diPlusData);
         diMinusSeries?.setData(diMinusData);
