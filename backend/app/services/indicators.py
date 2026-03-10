@@ -179,11 +179,7 @@ def calculate_indicators_with_extras(
     df['mfi_lower'] = -60
     
     # === Crossover detection ===
-    # CCI crossing above/below upper threshold
-    df['cci_cross_above'] = (df['cci'] > df['cci_upper']) & (df['cci'].shift(1) <= df['cci_upper'])
-    df['cci_cross_below'] = (df['cci'] < df['cci_lower']) & (df['cci'].shift(1) >= df['cci_lower'])
-    
-    # MFI crossing above/below threshold
+    # MFI crossing above/below threshold (only MFI, not CCI per user request)
     df['mfi_cross_above'] = (df['mfi'] > df['mfi_upper']) & (df['mfi'].shift(1) <= df['mfi_upper'])
     df['mfi_cross_below'] = (df['mfi'] < df['mfi_lower']) & (df['mfi'].shift(1) >= df['mfi_lower'])
     
